@@ -40,6 +40,7 @@ Nothing here is invented; each entry says how it was hit. Entries marked
    answerable with a key in hand (the smoke test's model-list check is
    built for exactly this). Until then, model IDs in
    `config/otari-routing.yml` are best-effort from official examples.
+   [RESOLVED later the same day — see entry 9.]
 
 5. **Routing policies are documented as config, and the hosted surface
    for them was not findable from the docs.** `routing.md` specifies
@@ -73,6 +74,55 @@ Nothing here is invented; each entry says how it was hit. Entries marked
    behaves exactly so (and how the refusal looks in the dashboard) is
    on the verify list for the next build step, when built-in tools
    enter the checker.
+
+## 2026-11-04 — live phase (real key, real gateway)
+
+9. **The hosted catalog contains neither the docs' example models nor
+   the blog's `mzai:` prefix.** Verified live with the real key:
+   `GET /api/v1/models` returns 159 models with plain `vendor/model`
+   IDs. The blog's example is today's `moonshotai/kimi-k2.6` (no
+   prefix); `openai:gpt-5-nano` and `anthropic:claude-haiku-4-5` —
+   the routing docs' thrifty/failover examples — are absent entirely,
+   so following the docs literally ends in model-not-found at call
+   time. VaultMind's routing config now uses only verified catalog
+   IDs. One pleasant surprise in the other direction: the /models
+   payload carries live per-model pricing, which no doc mentioned;
+   the config's price table now comes from the gateway itself.
+
+10. **The announced $20 starter credit never landed, and a $0.00
+    balance refuses even free models.** The dashboard showed $0.00
+    after sign-up; the gateway confirms it in its own words: every
+    chat completion returns HTTP 402, code `insufficient_funds`,
+    "Insufficient funds ($0.00) to serve this request." — including
+    catalog models priced $0.00 in / $0.00 out, so the balance gate
+    runs before pricing and there is no zero-cost way to smoke-test
+    generation on a fresh workspace. For a hackathon whose onboarding
+    promises the first 200 sign-ups a $20 token credit, the first-run
+    experience is a wall with no in-product explanation of where the
+    credit went. (VaultMind's live run hit exactly this; the raw
+    outputs are in `docs/evidence/`.)
+
+11. **Management surfaces reject a normal API key: "Invalid master
+    key".** With the workspace API key, `GET /api/v1/usage`,
+    `GET /api/v1/organizations/me`, `GET /api/v1/organizations/me/keys`
+    and `GET /api/v1/wallet` all answer 401 `{"detail":"Invalid
+    master key"}`, while `/models` and `/chat/completions` accept the
+    same key. The docs present `/v1/usage` as the usage surface and
+    document a keys API (`POST /api/v1/organizations/me/keys`) without
+    saying a separate master key gates them on the hosted deployment,
+    or where a hosted user obtains one. Anyone automating per-role
+    key creation — the exact pattern the hackathon encourages —
+    finds out only by hitting the wall.
+
+12. **Per-role virtual keys are therefore a dashboard-only workflow
+    here.** The keys API exists in the docs but is unreachable with
+    the key a hosted user actually holds (entry 11), and an
+    API-minted secret is shown exactly once, so it cannot be parked
+    in this workspace's credential store after the fact. The exact
+    dashboard steps for `vm-proposer` / `vm-checker` / `vm-reporter`
+    (names, model restrictions, USD limits) are written out in
+    `docs/OTARI_FEATURES.md`; it is the one manual step left in the
+    setup, and it is manual because of the platform, not the project.
 
 ## Non-Otari friction hit during the same build (context, not feedback)
 

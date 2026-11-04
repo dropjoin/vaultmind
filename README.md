@@ -62,11 +62,38 @@ frozen, …) or the guardrail finds a high-severity injection in the
 memo, the final verdict is REJECT and no model is asked to reconsider.
 When the floor passes, the checker model must also PASS.
 
+## Live status (2026-11-04)
+
+Exercised end-to-end against the hosted gateway and the live Sepolia
+vault — raw outputs in `docs/evidence/`:
+
+- Gateway auth and the model catalog check out with the real
+  workspace key (159 models; the routing config now uses verified
+  catalog IDs and the gateway's own prices — the blog/docs example
+  models do not exist in the hosted catalog, see `NOTES.md`).
+- Both demo proposes run the full pipeline against live vault state:
+  0.005 ETH → PASS card, 0.5 ETH → REJECT card, every gateway attempt
+  ledgered with failover.
+- **Blocked on the platform, not the code:** the workspace balance is
+  $0.00 — the announced $20 starter credit for the first 200 sign-ups
+  never appeared — and the gateway refuses every chat completion,
+  even $0-priced models, with 402 `insufficient_funds`. Until the
+  workspace carries a balance, the roles are attempted live and the
+  deterministic mirror decides (nothing is faked; the cards say so).
+  The same commands produce the full model-backed flow unchanged
+  once the workspace is funded.
+- The per-role virtual keys are the one remaining manual step
+  (dashboard only — the keys API needs a master key); exact steps in
+  `docs/OTARI_FEATURES.md`.
+
 ## Quickstart
 
 ```bash
 cp .env.example .env        # add your OTARI_API_KEY (otk_...)
 python3 scripts/smoke_test.py          # prove the Otari integration
+# In this workspace the key lives in a credential store instead of
+# .env; scripts/run_live.py fetches a runtime surrogate and runs any
+# command above with it, e.g.:  python3 scripts/run_live.py propose ...
 python3 vaultmind.py state             # live AgentVault readout
 python3 vaultmind.py propose --to 0xF04D8eA360eF3097E632a67F4b9a9B11523b3Dc1 \
     --amount 0.005 --memo "API usage for November"
@@ -96,6 +123,10 @@ configured.
 - `src/ledger.py` — JSONL usage ledger (role, model, tokens, est. cost).
 - `src/roles.py` — proposer / checker / reporter prompts and verdict logic.
 - `vaultmind.py` — the CLI.
+- `scripts/run_live.py` — runs the CLI/smoke test with the workspace
+  key obtained as a runtime surrogate from the credential store; the
+  key never touches disk.
+- `docs/evidence/` — raw outputs of the 2026-11-04 live run.
 - `docs/OTARI_FEATURES.md` — the Otari features table for the submission.
 - `NOTES.md` — genuine Otari docs friction found while building (the
   raw material for the feedback deliverable).
