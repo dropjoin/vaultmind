@@ -1,0 +1,83 @@
+# VaultMind routing configuration — every model call goes through Otari.
+#
+# Two layers live in this file:
+#
+# 1. `roles:` — VaultMind's own routing table. The client reads it to pick a
+#    model per role, enforce a local budget mirror, downgrade to the cheap
+#    model once a role's budget is >= thrifty_threshold (80%) used, and fail
+#    over to the fallback model on gateway errors. Each role maps to a
+#    *virtual key* in the Otari dashboard (scoped, revocable, model-limited)
+#    so the gateway sees the same three-role split the vault sees on-chain.
+#
+# 2. `gateway_policy:` — the same routing intent written in the Otari
+#    routing-policy YAML shape from the official Otari docs (routing.md:
+#    `select` with a `budget_used_pct: {gte: 80}` "thrifty" condition, plus
+#    `on_failure` failover). It is the policy to configure on the gateway
+#    side so enforcement also happens before dispatch, not only locally.
+#
+# Model IDs use the Otari `provider:model` spelling. `mzai:moonshotai/Kimi-K2.6`
+# is from Mozilla's official Otari blog post; `openai:gpt-5-nano` and
+# `anthropic:claude-haiku-4-5` are the models in the official routing docs'
+# thrifty/failover examples. Prices below are PUBLIC LIST PRICE ESTIMATES
+# (USD per 1M tokens) used only for VaultMind's local usage ledger — the
+# Otari dashboard is the billing source of truth.
+
+gateway:
+  base_url: https://api.otari.ai/api/v1
+  # The gateway enforces budgets before dispatch and refuses with
+  # 403 Otari-Error-Code: budget_exceeded (docs: budgets.md). The local
+  # budget mirror exists so the CLI can explain a refusal before it happens.
+
+roles:
+  proposer:
+    # Drafts the justification for a proposed payment.
+    virtual_key: vm-proposer
+    key_env: OTARI_KEY_PROPOSER
+    budget_usd: 0.50
+    models:
+      primary: mzai:moonshotai/Kimi-K2.6
+      cheap: openai:gpt-5-nano
+      fallback: anthropic:claude-haiku-4-5
+  checker:
+    # Evaluates a proposal against the on-chain policy; also runs the
+    # prompt-injection guardrail review of untrusted memo text.
+    virtual_key: vm-checker
+    key_env: OTARI_KEY_CHECKER
+    budget_usd: 0.50
+    models:
+      primary: mzai:moonshotai/Kimi-K2.6
+      cheap: openai:gpt-5-nano
+      fallback: anthropic:claude-haiku-4-5
+  reporter:
+    # Writes the plain-language decision card. Cheapest role by design.
+    virtual_key: vm-reporter
+    key_env: OTARI_KEY_REPORTER
+    budget_usd: 0.25
+    models:
+      primary: openai:gpt-5-nano
+      cheap: openai:gpt-5-nano
+      fallback: mzai:moonshotai/Kimi-K2.6
+
+# Local mirror of the gateway's budget-conditional routing ("thrifty"):
+# once a role has used >= 80% of its budget, route it to its cheap model.
+thrifty_threshold_pct: 80
+
+prices_usd_per_1m_tokens:
+  mzai:moonshotai/Kimi-K2.6: { input: 0.60, output: 2.50 }   # estimate
+  openai:gpt-5-nano: { input: 0.05, output: 0.40 }
+  openai:gpt-5-mini: { input: 0.25, output: 2.00 }
+  anthropic:claude-haiku-4-5: { input: 1.00, output: 5.00 }
+  default: { input: 1.00, output: 3.00 }  # unknown model: conservative estimate
+
+# The same intent as an Otari routing policy (docs: routing.md).
+gateway_policy:
+  routing:
+    policies:
+      vaultmind:
+        select:
+          - when:
+              budget_used_pct: { gte: 80 }
+            target: openai:gpt-5-nano
+          - default: mzai:moonshotai/Kimi-K2.6
+        on_failure:
+          - anthropic:claude-haiku-4-5
