@@ -15,12 +15,15 @@
 #    `on_failure` failover). It is the policy to configure on the gateway
 #    side so enforcement also happens before dispatch, not only locally.
 #
-# Model IDs use the Otari `provider:model` spelling. `mzai:moonshotai/Kimi-K2.6`
-# is from Mozilla's official Otari blog post; `openai:gpt-5-nano` and
-# `anthropic:claude-haiku-4-5` are the models in the official routing docs'
-# thrifty/failover examples. Prices below are PUBLIC LIST PRICE ESTIMATES
-# (USD per 1M tokens) used only for VaultMind's local usage ledger — the
-# Otari dashboard is the billing source of truth.
+# Model IDs are the hosted catalog's plain `vendor/model` IDs, verified
+# live against GET /api/v1/models on 2026-11-04. The blog-era spellings
+# do NOT resolve on the hosted gateway: there is no `mzai:` provider
+# prefix (the blog's example model is today's `moonshotai/kimi-k2.6`),
+# and `openai:gpt-5-nano` / `anthropic:claude-haiku-4-5` from the routing
+# docs are not in the hosted catalog at all (see NOTES.md). Prices below
+# are the gateway's own per-model prices from the /models response
+# (USD per 1M tokens) — the same numbers the dashboard bills from; they
+# feed VaultMind's local usage ledger.
 
 gateway:
   base_url: https://api.otari.ai/api/v1
@@ -35,9 +38,9 @@ roles:
     key_env: OTARI_KEY_PROPOSER
     budget_usd: 0.50
     models:
-      primary: mzai:moonshotai/Kimi-K2.6
-      cheap: openai:gpt-5-nano
-      fallback: anthropic:claude-haiku-4-5
+      primary: moonshotai/kimi-k2.6
+      cheap: deepseek/deepseek-v4-flash
+      fallback: deepseek/deepseek-v3.2
   checker:
     # Evaluates a proposal against the on-chain policy; also runs the
     # prompt-injection guardrail review of untrusted memo text.
@@ -45,28 +48,30 @@ roles:
     key_env: OTARI_KEY_CHECKER
     budget_usd: 0.50
     models:
-      primary: mzai:moonshotai/Kimi-K2.6
-      cheap: openai:gpt-5-nano
-      fallback: anthropic:claude-haiku-4-5
+      primary: moonshotai/kimi-k2.6
+      cheap: deepseek/deepseek-v4-flash
+      fallback: z-ai/glm-4.7
   reporter:
     # Writes the plain-language decision card. Cheapest role by design.
     virtual_key: vm-reporter
     key_env: OTARI_KEY_REPORTER
     budget_usd: 0.25
     models:
-      primary: openai:gpt-5-nano
-      cheap: openai:gpt-5-nano
-      fallback: mzai:moonshotai/Kimi-K2.6
+      primary: deepseek/deepseek-v4-flash
+      cheap: openai/gpt-oss-20b
+      fallback: moonshotai/kimi-k2.6
 
 # Local mirror of the gateway's budget-conditional routing ("thrifty"):
 # once a role has used >= 80% of its budget, route it to its cheap model.
 thrifty_threshold_pct: 80
 
 prices_usd_per_1m_tokens:
-  mzai:moonshotai/Kimi-K2.6: { input: 0.60, output: 2.50 }   # estimate
-  openai:gpt-5-nano: { input: 0.05, output: 0.40 }
-  openai:gpt-5-mini: { input: 0.25, output: 2.00 }
-  anthropic:claude-haiku-4-5: { input: 1.00, output: 5.00 }
+  # From the gateway's own /models pricing block, fetched live 2026-11-04.
+  moonshotai/kimi-k2.6: { input: 0.75, output: 3.50 }
+  deepseek/deepseek-v3.2: { input: 0.62, output: 1.85 }
+  z-ai/glm-4.7: { input: 0.40, output: 1.75 }
+  deepseek/deepseek-v4-flash: { input: 0.09, output: 0.18 }
+  openai/gpt-oss-20b: { input: 0.03, output: 0.14 }
   default: { input: 1.00, output: 3.00 }  # unknown model: conservative estimate
 
 # The same intent as an Otari routing policy (docs: routing.md).
@@ -77,7 +82,8 @@ gateway_policy:
         select:
           - when:
               budget_used_pct: { gte: 80 }
-            target: openai:gpt-5-nano
-          - default: mzai:moonshotai/Kimi-K2.6
+            target: deepseek/deepseek-v4-flash
+          - default: moonshotai/kimi-k2.6
         on_failure:
-          - anthropic:claude-haiku-4-5
+          - deepseek/deepseek-v3.2
+          - z-ai/glm-4.7
