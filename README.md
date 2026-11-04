@@ -74,14 +74,15 @@ vault — raw outputs in `docs/evidence/`:
 - Both demo proposes run the full pipeline against live vault state:
   0.005 ETH → PASS card, 0.5 ETH → REJECT card, every gateway attempt
   ledgered with failover.
-- **Blocked on the platform, not the code:** the workspace balance is
-  $0.00 — the announced $20 starter credit for the first 200 sign-ups
-  never appeared — and the gateway refuses every chat completion,
-  even $0-priced models, with 402 `insufficient_funds`. Until the
-  workspace carries a balance, the roles are attempted live and the
-  deterministic mirror decides (nothing is faked; the cards say so).
-  The same commands produce the full model-backed flow unchanged
-  once the workspace is funded.
+- **Funded and fully model-backed (2026-11-04):** the $20 starter
+  credit landed via the organizer's voucher (Marcus, DoraHacks
+  message), and the full model-backed run completed against the
+  funded workspace — smoke test OK, both demo proposes decided by
+  the models through the gateway, usage ledgered per role. Raw
+  outputs in `docs/evidence/` (the `*-funded.txt` files). Earlier
+  the same day the workspace sat at $0.00 and the gateway refused
+  every completion with 402 `insufficient_funds`; that block is
+  resolved, not current.
 - The per-role virtual keys are the one remaining manual step
   (dashboard only — the keys API needs a master key); exact steps in
   `docs/OTARI_FEATURES.md`.
@@ -144,9 +145,10 @@ configured.
    smoke test, nothing else).
 4. **Otari features used** — `docs/OTARI_FEATURES.md` (implemented vs
    workspace-configuration status stated per feature).
-5. **PRs / issues on mozilla-ai/otari** — to be filed from the real
-   friction in `NOTES.md` during the build window (the base-URL and
-   key-prefix doc mismatches are issue-ready).
+5. **PRs / issues on mozilla-ai/otari** — FILED 2026-11-05 from the
+   real friction in `NOTES.md`:
+   https://github.com/mozilla-ai/otari/issues/2898 (the base-URL and
+   key-prefix doc mismatches).
 6. **Demo video (3–5 min)** — outline in the scoring plan: live vault
    state → in-policy PASS → over-cap REJECT → poisoned memo blocked →
    budget downgrade + failover → per-role usage costs. *(Link added
