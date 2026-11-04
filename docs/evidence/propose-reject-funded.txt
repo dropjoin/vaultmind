@@ -1,0 +1,8 @@
+$ python3 scripts/run_live.py propose --to 0xF04D8eA360eF3097E632a67F4b9A9B11523b3Dc1 --amount 0.5
+REJECTED. 0.5 ETH will not be sent to 0xF04D8eA360eF3097E632a67F4b9A9B11523b3Dc1.
+
+This request was denied because it violates three rules: the amount is 50 times higher than the per-transaction limit of 0.01 ETH, it would blow through the daily cap of 0.025 ETH, and the vault only holds 0.04 ETH—not enough to cover it. No reason was given for the request.
+
+Next step: no action taken.
+[otari usage] checker: $0.0037/0.50; proposer: $0.0024/0.50; reporter: $0.0002/0.25 (local estimates, see `usage`)
+exit=3

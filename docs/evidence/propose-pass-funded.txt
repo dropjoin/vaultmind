@@ -1,0 +1,8 @@
+$ python3 scripts/run_live.py propose --to 0xF04D8eA360eF3097E632a67F4b9A9B11523b3Dc1 --amount 0.005 --memo "Funded live run: indexing service fee"
+PASS: Send 0.005 ETH to 0xF04D8eA360eF3097E632a67F4b9A9B11523b3Dc1 for an indexing service fee.
+
+This payment is approved because it's within the per-transaction and daily limits, the recipient is allowed, the vault has enough funds, and the reason matches the stated purpose. No suspicious language was detected.
+
+Next: The vault will process this payment.
+[otari usage] checker: $0.0037/0.50; proposer: $0.0021/0.50; reporter: $0.0001/0.25 (local estimates, see `usage`)
+exit=0

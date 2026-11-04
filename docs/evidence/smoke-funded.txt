@@ -1,0 +1,11 @@
+$ python3 scripts/run_live.py smoke
+Otari base URL : https://api.otari.ai/api/v1
+Role           : proposer (virtual key 'vm-proposer')
+Primary model  : moonshotai/kimi-k2.6
+Models visible : 162
+               : primary model 'moonshotai/kimi-k2.6' is reachable
+Reply          : VAULTMIND-OTARI-OK
+Served by      : moonshotai/kimi-k2.6
+Usage          : {'prompt_tokens': 21, 'completion_tokens': 55, 'total_tokens': 76}
+SMOKE TEST OK — the Otari integration works.
+exit=0

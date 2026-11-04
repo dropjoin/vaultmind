@@ -1,0 +1,5 @@
+$ python3 scripts/run_live.py usage
+checker   calls=6 errors=4 tokens=2735 est=$0.0037 of $0.50 budget (0.7%)
+proposer  calls=9 errors=6 tokens=1341 est=$0.0024 of $0.50 budget (0.5%)
+reporter  calls=7 errors=4 tokens=1585 est=$0.0002 of $0.25 budget (0.1%)
+exit=0
