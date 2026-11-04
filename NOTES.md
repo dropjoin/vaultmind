@@ -133,3 +133,12 @@ Nothing here is invented; each entry says how it was hit. Entries marked
   connection without response") escapes urllib as a raw
   `http.client.RemoteDisconnected`, not a `URLError`. The Otari client
   now normalises it into a gateway error so failover engages.
+- The same urllib weakness bit the vault reader harder: public RPC
+  endpoints intermittently truncate response bodies, and
+  `http.client.IncompleteRead` is not a `URLError` either, so it
+  escaped the reader's endpoint-failover loop entirely and crashed
+  `propose` before any model call ("ERROR: IncompleteRead(103 bytes
+  read)"). A same-payload probe (25 calls per endpoint) failed 15 of
+  75 urllib calls and 0 of 75 `requests` calls, so the vault reader's
+  transport now uses `requests`; any transport failure moves on to
+  the next endpoint instead of crashing the run.

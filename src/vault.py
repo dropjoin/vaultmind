@@ -8,14 +8,20 @@ signatures from src/AgentVault.sol, ABI kept in src/agentvault_abi.json
 Public RPC notes (observed 2026-11-04): Arbitrum's official Sepolia
 endpoint answers 403 to the default Python urllib User-Agent, so every
 request carries an explicit UA; several endpoints are tried in order.
+The transport is `requests`, not urllib: probing the three endpoints
+with the same eth_call payload, urllib failed 15 of 75 calls (6x
+http.client.IncompleteRead and 2x RemoteDisconnected on the first
+endpoint alone), and IncompleteRead is not a URLError subclass, so it
+escaped this reader's failover loop and crashed the CLI outright
+("ERROR: IncompleteRead(103 bytes read)"). `requests` read the same
+75 calls without a single failure and roughly 3x faster.
 """
 from __future__ import annotations
 
-import json
 import os
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
+
+import requests
 
 try:
     from Crypto.Hash import keccak as _keccak
@@ -104,24 +110,27 @@ class VaultReader:
 
     # -- transport ------------------------------------------------------
     def _eth_call(self, data: str) -> str:
-        payload = json.dumps({
+        payload = {
             "jsonrpc": "2.0", "id": 1, "method": "eth_call",
             "params": [{"to": self.vault, "data": "0x" + data}, "latest"],
-        }).encode()
+        }
         last_err: Exception | None = None
         for rpc in self.rpcs:
-            req = urllib.request.Request(
-                rpc, data=payload,
-                headers={"Content-Type": "application/json",
-                         "User-Agent": USER_AGENT})
             try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                    out = json.loads(resp.read().decode())
+                resp = requests.post(
+                    rpc, json=payload, timeout=self.timeout,
+                    headers={"Content-Type": "application/json",
+                             "User-Agent": USER_AGENT})
+                resp.raise_for_status()
+                out = resp.json()
                 if "error" in out:
                     raise VaultReadError(f"RPC error from {rpc}: {out['error']}")
                 return out["result"]
-            except (urllib.error.URLError, TimeoutError, ValueError,
+            except (requests.RequestException, ValueError,
                     VaultReadError) as exc:
+                # Any transport failure (a truncated body surfaces in
+                # requests as ChunkedEncodingError) moves on to the
+                # next endpoint instead of crashing the run.
                 last_err = exc
         raise VaultReadError(
             f"All Arbitrum Sepolia RPC endpoints failed: {last_err}")
