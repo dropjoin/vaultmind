@@ -1,0 +1,137 @@
+# VaultMind — a policy copilot for an AI agent's vault, powered by Otari
+
+> **Submission summary (item 1):** VaultMind · built by M Aziz Yahya
+> (GitHub `dropjoin`) · Contact/sign-up email: the address registered
+> for this hackathon on DoraHacks and Otari.ai ·
+> **One line:** VaultMind is an AI copilot that reads a live on-chain
+> policy vault (AgentVault), drafts and checks proposed agent payments
+> against the vault's caps and allowlist, and explains every decision —
+> with every model call routed through Otari under per-role virtual
+> keys and budgets.
+
+## The idea
+
+AgentVault (the parent project) is a Solidity vault on Arbitrum that
+separates *owning* money from *spending* it: a human owner sets hard
+on-chain rules — a per-transaction cap, a daily cap, recipient and
+token allowlists — and an AI agent's hot key can only spend inside
+them. The contract enforces the policy at execution time.
+
+But a contract can't *explain* itself, draft a justification, or smell
+a manipulated payment request. That's the copilot's job — and the
+copilot itself needs a policy. VaultMind gives the agent's **brain**
+the same treatment AgentVault gives its **wallet**:
+
+| AgentVault (on-chain, for money) | VaultMind via Otari (for model calls) |
+|---|---|
+| Per-transaction cap | Per-role budget, enforced before dispatch |
+| Daily cap | Budget window per virtual key |
+| Recipient allowlist | Model-scoped virtual keys (a role can only reach its models) |
+| Owner freeze | Revocable keys; local budget block at 100% |
+| `agentSpend` policy check | Checker role + deterministic policy mirror |
+
+## How it works
+
+```
+        ┌──────────────── Arbitrum Sepolia ────────────────┐
+        │  AgentVault 0x0344…C87d1C3                          │
+        │  owner · agent · frozen · getPolicy · balanceOf · │
+        │  allowedRecipient                                 │
+        └───────────────▲───────────────────────────────────┘
+                        │ eth_call (live state)
+        ┌───────────────┴───────────────────────────────────┐
+        │  VaultMind CLI (this repo)                        │
+        │  1. proposer  — drafts the justification          │
+        │  2. floor     — deterministic mirror of           │
+        │     agentSpend's require() chain + injection      │
+        │     guardrail scan of the untrusted memo          │
+        │  3. checker   — judgment layer: PASS / REJECT     │
+        │  4. reporter  — plain-language decision card      │
+        └───────────────▲───────────────────────────────────┘
+                        │ every model call, per-role key
+        ┌───────────────┴───────────────────────────────────┐
+        │  Otari gateway (hosted, api.otari.ai)             │
+        │  virtual keys · budgets · thrifty routing (>=80%  │
+        │  budget -> cheap model) · failover · usage        │
+        └───────────────────────────────────────────────────┘
+```
+
+Governance rule: **a model may tighten a verdict, never loosen it.**
+If the deterministic mirror rejects (over cap, not allowlisted,
+frozen, …) or the guardrail finds a high-severity injection in the
+memo, the final verdict is REJECT and no model is asked to reconsider.
+When the floor passes, the checker model must also PASS.
+
+## Quickstart
+
+```bash
+cp .env.example .env        # add your OTARI_API_KEY (otk_...)
+python3 scripts/smoke_test.py          # prove the Otari integration
+python3 vaultmind.py state             # live AgentVault readout
+python3 vaultmind.py propose --to 0xF04D8eA360eF3097E632a67F4b9a9B11523b3Dc1 \
+    --amount 0.005 --memo "API usage for November"
+python3 vaultmind.py propose --to 0xF04D8eA360eF3097E632a67F4b9a9B11523b3Dc1 \
+    --amount 0.5                 # -> REJECT: per-tx cap is 0.01 ETH
+python3 vaultmind.py usage             # per-role Otari spend vs budget
+python3 -m unittest discover -s tests  # 27 tests, no key needed
+```
+
+Without an `OTARI_API_KEY` the chain reads and the policy mirror still
+run; the model roles report SKIPPED — nothing is faked. Exit codes:
+`0` PASS/ok, `3` REJECT, `1` runtime error, `2` smoke test not
+configured.
+
+## Repo map
+
+- `src/otari_client.py` — the Otari gateway client (the integration
+  that landed in this branch's first commit).
+- `config/otari-routing.yml` — per-role virtual keys, budgets, models;
+  thrifty threshold; the same routing intent in the Otari docs'
+  policy YAML shape.
+- `src/vault.py` + `src/agentvault_abi.json` — live AgentVault reader
+  (raw JSON-RPC, ABI from the project's own Foundry artifact).
+- `src/policy.py` — deterministic mirror of the contract's checks.
+- `src/guardrail.py` — prompt-injection tripwire for untrusted memos.
+- `src/router.py` — budget-conditional model selection + failover.
+- `src/ledger.py` — JSONL usage ledger (role, model, tokens, est. cost).
+- `src/roles.py` — proposer / checker / reporter prompts and verdict logic.
+- `vaultmind.py` — the CLI.
+- `docs/OTARI_FEATURES.md` — the Otari features table for the submission.
+- `NOTES.md` — genuine Otari docs friction found while building (the
+  raw material for the feedback deliverable).
+- `tests/` — policy fixtures (over-cap → REJECT, non-allowlisted →
+  REJECT, valid → PASS, boundary cases), routing/failover, guardrail.
+
+## Hackathon submission map (Devs Wilding Online, 7 items)
+
+1. **Name / email / one-liner** — see the summary block at the top.
+2. **Public repo + branch** — this repository, branch
+   `devs-wilding-otari`.
+3. **First commit where Otari came in** — the branch's root commit,
+   `feat(otari): integrate the Otari gateway — client wrapper,
+   per-role routing config, smoke test` (client + routing config +
+   smoke test, nothing else).
+4. **Otari features used** — `docs/OTARI_FEATURES.md` (implemented vs
+   workspace-configuration status stated per feature).
+5. **PRs / issues on mozilla-ai/otari** — to be filed from the real
+   friction in `NOTES.md` during the build window (the base-URL and
+   key-prefix doc mismatches are issue-ready).
+6. **Demo video (3–5 min)** — outline in the scoring plan: live vault
+   state → in-policy PASS → over-cap REJECT → poisoned memo blocked →
+   budget downgrade + failover → per-role usage costs. *(Link added
+   when recorded; per the builder's rule, the user uploads videos
+   himself.)*
+7. **Feedback** — written answers drafted from `NOTES.md`; screen
+   recording to follow the same material. Only friction actually hit
+   while building is claimed.
+
+## Deadline discipline
+
+Submission deadline is **11 Nov 2026, 22:59 UTC** (the DoraHacks event
+window). A later date shown in one dashboard field (3 Dec) is treated
+as a platform artifact, not an extension — see the scoring plan's
+deadline analysis in the build notes.
+
+## License
+
+MIT.

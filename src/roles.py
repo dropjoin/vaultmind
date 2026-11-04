@@ -107,7 +107,7 @@ def run_checker(caller: RoutedCaller | None, proposal: Proposal,
         return CheckerOutcome(
             final_verdict=det.verdict,
             reasons=list(det.reasons) + [
-                "LLM checker skipped (no Otari key configured); verdict "
+                "LLM checker not run (no working Otari key); verdict "
                 "is the deterministic policy mirror only."],
             source="deterministic")
 

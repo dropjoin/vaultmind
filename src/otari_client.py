@@ -15,6 +15,7 @@ Design rules:
 """
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.error
 import urllib.request
@@ -85,7 +86,12 @@ class OtariClient:
                 f"Otari gateway HTTP {exc.code} on {path}: {detail}{hint}",
                 status=exc.code, detail=str(detail),
             ) from exc
-        except (urllib.error.URLError, TimeoutError) as exc:
+        except (urllib.error.URLError, TimeoutError, ConnectionError,
+                http.client.HTTPException, OSError) as exc:
+            # Includes http.client.RemoteDisconnected ("Remote end closed
+            # connection without response"), which urllib lets escape raw
+            # when a server/CDN drops the connection mid-response — that
+            # must read as a gateway failure so failover can engage.
             raise OtariError(f"Otari gateway unreachable at {url}: {exc}") from exc
 
     # -- public API -----------------------------------------------------
@@ -130,6 +136,7 @@ class OtariClient:
             raw = exc.read().decode("utf-8", "replace") if exc.fp else ""
             raise OtariError(f"Otari gateway HTTP {exc.code} on /models: {raw[:300]}",
                              status=exc.code, detail=raw[:300]) from exc
-        except (urllib.error.URLError, TimeoutError) as exc:
+        except (urllib.error.URLError, TimeoutError, ConnectionError,
+                http.client.HTTPException, OSError) as exc:
             raise OtariError(f"Otari gateway unreachable: {exc}") from exc
         return [m.get("id", "") for m in data.get("data", []) if m.get("id")]
