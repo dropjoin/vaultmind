@@ -50,7 +50,7 @@ def select_model(role_cfg: dict, spend_usd: float,
     models = role_cfg["models"]
     if pct >= threshold_pct and models["cheap"] != models["primary"]:
         return models["cheap"], pct, True
-    return models["primary"], pct, pct >= threshold_pct
+    return models["primary"], pct, False
 
 
 class RoutedCaller:
