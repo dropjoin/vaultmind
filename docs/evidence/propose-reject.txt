@@ -1,0 +1,18 @@
+$ python3 scripts/run_live.py propose --to 0xF04D8eA360eF3097E632a67F4b9A9B11523b3Dc1 --amount 0.5
+[proposer FAILED] Otari gateway HTTP 402 on /chat/completions: Insufficient funds ($0.00) to serve this request.
+[reporter FAILED] Otari gateway HTTP 402 on /chat/completions: Insufficient funds ($0.00) to serve this request. — using the template card.
+┌─ VAULTMIND DECISION CARD ─────────────────────────────
+│ Verdict   : REJECT
+│ Recipient : 0xF04D8eA360eF3097E632a67F4b9A9B11523b3Dc1
+│ Amount    : 0.5 ETH
+│ Policy    : per-tx 0.01 ETH · daily 0.025 ETH · headroom 0.015 ETH
+│ Balance   : 0.04 ETH · frozen=False
+│ Reasons   :
+│   - Amount 0.5 ETH exceeds the per-transaction cap of 0.01 ETH.
+│   - Daily cap exceeded: 0.01 ETH already spent today + 0.5 ETH proposed > daily cap 0.025 ETH.
+│   - Amount exceeds the vault balance (0.04 ETH available).
+│ Guardrail : No injection patterns detected in the memo.
+│ Checked by: deterministic
+└───────────────────────────────────────────────────────
+[otari usage] checker: $0.0000/0.50; proposer: $0.0000/0.50; reporter: $0.0000/0.25 (local estimates, see `usage`)
+exit=3

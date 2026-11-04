@@ -1,0 +1,18 @@
+$ python3 scripts/run_live.py propose --to 0xF04D8eA360eF3097E632a67F4b9A9B11523b3Dc1 --amount 0.005 --memo "API usage for November"
+[proposer FAILED] Otari gateway HTTP 402 on /chat/completions: Insufficient funds ($0.00) to serve this request.
+[checker LLM FAILED] Otari gateway HTTP 402 on /chat/completions: Insufficient funds ($0.00) to serve this request. — falling back to the deterministic mirror.
+[reporter FAILED] Otari gateway HTTP 402 on /chat/completions: Insufficient funds ($0.00) to serve this request. — using the template card.
+┌─ VAULTMIND DECISION CARD ─────────────────────────────
+│ Verdict   : PASS
+│ Recipient : 0xF04D8eA360eF3097E632a67F4b9A9B11523b3Dc1
+│ Amount    : 0.005 ETH
+│ Policy    : per-tx 0.01 ETH · daily 0.025 ETH · headroom 0.015 ETH
+│ Balance   : 0.04 ETH · frozen=False
+│ Reasons   :
+│   - All on-chain policy checks pass.
+│   - LLM checker not run (no working Otari key); verdict is the deterministic policy mirror only.
+│ Guardrail : No injection patterns detected in the memo.
+│ Checked by: deterministic
+└───────────────────────────────────────────────────────
+[otari usage] checker: $0.0000/0.50; proposer: $0.0000/0.50; reporter: $0.0000/0.25 (local estimates, see `usage`)
+exit=0

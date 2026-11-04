@@ -1,0 +1,10 @@
+$ python3 scripts/run_live.py state --check-recipient 0xF04D8eA360eF3097E632a67F4b9A9B11523b3Dc1
+AgentVault 0x0344c57616d0ff50608D85B1852C5e3E3C87d1C3 — Arbitrum Sepolia
+  owner          : 0x552859077c21d905708f3b0644514e6b12c21032
+  agent (hot key): 0x282d13e8351587694dc99b568eaf0d8e9810fb6b
+  frozen         : False
+  token          : native ETH
+  policy         : configured=True · per-tx cap 0.01 ETH · daily cap 0.025 ETH · spent today 0.01 ETH
+  balance        : 0.04 ETH
+  allowlist[0xF04D8eA360eF3097E632a67F4b9A9B11523b3Dc1] : True
+exit=0

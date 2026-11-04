@@ -1,0 +1,8 @@
+$ python3 scripts/run_live.py smoke
+Otari base URL : https://api.otari.ai/api/v1
+Role           : proposer (virtual key 'vm-proposer')
+Primary model  : moonshotai/kimi-k2.6
+Models visible : 159
+               : primary model 'moonshotai/kimi-k2.6' is reachable
+GATEWAY ERROR: Otari gateway HTTP 402 on /chat/completions: Insufficient funds ($0.00) to serve this request.
+exit=1
