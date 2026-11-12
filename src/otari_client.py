@@ -38,6 +38,19 @@ class OtariNotConfigured(OtariError):
     """No API key configured for the requested role."""
 
 
+def _safe_int(value: object) -> int:
+    """Best-effort int for a gateway usage field; garbage reads as 0."""
+    if isinstance(value, bool):
+        return int(value)
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        try:
+            return int(float(value))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return 0
+
+
 class OtariClient:
     def __init__(self, role: str, role_cfg: dict, base_url: str | None = None,
                  timeout: float = 60.0):
@@ -55,6 +68,26 @@ class OtariClient:
             )
 
     # -- low level ------------------------------------------------------
+    def _read_json(self, resp, path: str) -> dict:
+        """Decode a gateway JSON body; malformed bodies are OtariErrors.
+
+        A 200 with an HTML error page or a truncated body used to raise
+        a raw ValueError, which the router does not catch — failover
+        never engaged and the CLI died. Every malformed response is a
+        failed candidate, so it reads as OtariError like any other.
+        """
+        try:
+            data = json.loads(resp.read().decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise OtariError(
+                f"Otari gateway returned a malformed response on {path}: "
+                f"{exc}") from exc
+        if not isinstance(data, dict):
+            raise OtariError(
+                f"Otari gateway returned a non-object response on {path}: "
+                f"{str(data)[:120]}")
+        return data
+
     def _post(self, path: str, payload: dict) -> dict:
         url = f"{self.base_url}{path}"
         body = json.dumps(payload).encode("utf-8")
@@ -70,7 +103,9 @@ class OtariClient:
         )
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                return json.loads(resp.read().decode("utf-8"))
+                return self._read_json(resp, path)
+        except OtariError:
+            raise
         except urllib.error.HTTPError as exc:
             raw = exc.read().decode("utf-8", "replace") if exc.fp else ""
             detail = raw
@@ -87,11 +122,12 @@ class OtariClient:
                 status=exc.code, detail=str(detail),
             ) from exc
         except (urllib.error.URLError, TimeoutError, ConnectionError,
-                http.client.HTTPException, OSError) as exc:
+                http.client.HTTPException, OSError, ValueError) as exc:
             # Includes http.client.RemoteDisconnected ("Remote end closed
             # connection without response"), which urllib lets escape raw
             # when a server/CDN drops the connection mid-response — that
             # must read as a gateway failure so failover can engage.
+            # ValueError covers a malformed base URL ("unknown url type").
             raise OtariError(f"Otari gateway unreachable at {url}: {exc}") from exc
 
     # -- public API -----------------------------------------------------
@@ -104,19 +140,26 @@ class OtariClient:
             "temperature": temperature,
         })
         choices = resp.get("choices") or []
-        if not choices:
+        if not isinstance(choices, list) or not choices:
             # The Otari routing docs treat an answer with no choices as a
             # failed candidate; surface it the same way so failover applies.
             raise OtariError(f"Otari returned no choices for model {model}",
                              detail=str(resp)[:300])
+        first = choices[0] if isinstance(choices[0], dict) else {}
+        message = first.get("message") or {}
+        if not isinstance(message, dict):
+            message = {}
+        content = message.get("content", "")
         usage = resp.get("usage") or {}
+        if not isinstance(usage, dict):
+            usage = {}
         return {
-            "content": choices[0].get("message", {}).get("content", ""),
-            "model": resp.get("model", model),
+            "content": content if isinstance(content, str) else str(content),
+            "model": resp.get("model", model) or model,
             "usage": {
-                "prompt_tokens": int(usage.get("prompt_tokens", 0)),
-                "completion_tokens": int(usage.get("completion_tokens", 0)),
-                "total_tokens": int(usage.get("total_tokens", 0)),
+                "prompt_tokens": _safe_int(usage.get("prompt_tokens")),
+                "completion_tokens": _safe_int(usage.get("completion_tokens")),
+                "total_tokens": _safe_int(usage.get("total_tokens")),
             },
         }
 
@@ -131,12 +174,18 @@ class OtariClient:
         )
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
+                data = self._read_json(resp, "/models")
+        except OtariError:
+            raise
         except urllib.error.HTTPError as exc:
             raw = exc.read().decode("utf-8", "replace") if exc.fp else ""
             raise OtariError(f"Otari gateway HTTP {exc.code} on /models: {raw[:300]}",
                              status=exc.code, detail=raw[:300]) from exc
         except (urllib.error.URLError, TimeoutError, ConnectionError,
-                http.client.HTTPException, OSError) as exc:
+                http.client.HTTPException, OSError, ValueError) as exc:
             raise OtariError(f"Otari gateway unreachable: {exc}") from exc
-        return [m.get("id", "") for m in data.get("data", []) if m.get("id")]
+        models = data.get("data", [])
+        if not isinstance(models, list):
+            return []
+        return [m["id"] for m in models
+                if isinstance(m, dict) and m.get("id")]

@@ -6,8 +6,17 @@
 > **One line:** VaultMind is an AI copilot that reads a live on-chain
 > policy vault (AgentVault), drafts and checks proposed agent payments
 > against the vault's caps and allowlist, and explains every decision —
-> with every model call routed through Otari under per-role virtual
-> keys and budgets.
+> with every model call routed through Otari under per-role budgets
+> and routing, and per-role virtual keys created in the Otari
+> dashboard (the keys API needs a master key; see "Live status").
+
+## Live console
+
+**https://vaultmind.apeagent.online** — the VaultMind console: live
+on-chain reads from the AgentVault contract on Arbitrum Sepolia, an
+interactive payment check that runs the same deterministic policy
+mirror, prompt-injection guardrail and checker governance as the CLI,
+per-role Otari budgets, and a session audit trail you can export.
 
 ## The idea
 
@@ -90,6 +99,7 @@ vault — raw outputs in `docs/evidence/`:
 ## Quickstart
 
 ```bash
+pip install -r requirements.txt
 cp .env.example .env        # add your OTARI_API_KEY (otk_...)
 python3 scripts/smoke_test.py          # prove the Otari integration
 # In this workspace the key lives in a credential store instead of
@@ -101,7 +111,7 @@ python3 vaultmind.py propose --to 0xF04D8eA360eF3097E632a67F4b9a9B11523b3Dc1 \
 python3 vaultmind.py propose --to 0xF04D8eA360eF3097E632a67F4b9a9B11523b3Dc1 \
     --amount 0.5                 # -> REJECT: per-tx cap is 0.01 ETH
 python3 vaultmind.py usage             # per-role Otari spend vs budget
-python3 -m unittest discover -s tests  # 27 tests, no key needed
+python3 -m unittest discover -s tests  # 74 tests, no key needed
 ```
 
 Without an `OTARI_API_KEY` the chain reads and the policy mirror still
@@ -124,6 +134,8 @@ configured.
 - `src/ledger.py` — JSONL usage ledger (role, model, tokens, est. cost).
 - `src/roles.py` — proposer / checker / reporter prompts and verdict logic.
 - `vaultmind.py` — the CLI.
+- `requirements.txt` — runtime dependencies (`requests`, `PyYAML`,
+  optional `pycryptodome`).
 - `scripts/run_live.py` — runs the CLI/smoke test with the workspace
   key obtained as a runtime surrogate from the credential store; the
   key never touches disk.

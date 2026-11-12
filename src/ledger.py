@@ -19,12 +19,28 @@ from pathlib import Path
 from . import config as cfg
 
 
+def _num(value: object, default: float = 0.0) -> float:
+    """Best-effort number for a ledger/config field; garbage reads as default."""
+    if isinstance(value, bool):
+        return float(value)
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
 def estimate_cost_usd(model: str, usage: dict, routing: dict) -> float:
     prices = routing.get("prices_usd_per_1m_tokens", {})
+    if not isinstance(prices, dict):
+        prices = {}
     price = prices.get(model) or prices.get("default",
                                             {"input": 1.0, "output": 3.0})
-    return (usage.get("prompt_tokens", 0) / 1_000_000 * price["input"]
-            + usage.get("completion_tokens", 0) / 1_000_000 * price["output"])
+    if not isinstance(price, dict):
+        price = {"input": 1.0, "output": 3.0}
+    return (_num(usage.get("prompt_tokens")) / 1_000_000
+            * _num(price.get("input"), 1.0)
+            + _num(usage.get("completion_tokens")) / 1_000_000
+            * _num(price.get("output"), 3.0))
 
 
 class UsageLedger:
@@ -55,18 +71,34 @@ class UsageLedger:
         return entry
 
     def entries(self) -> list[dict]:
+        """All parseable entries; corrupt lines are skipped, not fatal.
+
+        The ledger is append-only local data: a partial write from a
+        killed run (or a hand edit) used to make every read — budget
+        mirror, thrifty downgrade, `usage` — crash on one bad line.
+        Skipping the line keeps the budget mirror running on the
+        entries that did parse; the gateway's own budgets remain the
+        hard enforcement, so a skipped line can only undercount the
+        local estimate, never overspend past the gateway.
+        """
         if not self.path.exists():
             return []
         out = []
         for line in self.path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
-            if line:
-                out.append(json.loads(line))
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(entry, dict) and entry.get("role"):
+                out.append(entry)
         return out
 
     def role_spend_usd(self, role: str) -> float:
-        return sum(e["est_cost_usd"] for e in self.entries()
-                   if e["role"] == role and e["status"] == "ok")
+        return sum(_num(e.get("est_cost_usd")) for e in self.entries()
+                   if e.get("role") == role and e.get("status") == "ok")
 
     def summary(self) -> dict[str, dict]:
         out: dict[str, dict] = {}
@@ -75,9 +107,9 @@ class UsageLedger:
                 "calls": 0, "errors": 0, "total_tokens": 0,
                 "est_cost_usd": 0.0})
             bucket["calls"] += 1
-            if e["status"] != "ok":
+            if e.get("status") != "ok":
                 bucket["errors"] += 1
-            bucket["total_tokens"] += e["total_tokens"]
+            bucket["total_tokens"] += int(_num(e.get("total_tokens")))
             bucket["est_cost_usd"] = round(
-                bucket["est_cost_usd"] + e["est_cost_usd"], 8)
+                bucket["est_cost_usd"] + _num(e.get("est_cost_usd")), 8)
         return out

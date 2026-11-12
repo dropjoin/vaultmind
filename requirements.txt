@@ -1,0 +1,7 @@
+# VaultMind runtime dependencies (tested versions in comments).
+# Install: pip install -r requirements.txt
+requests>=2.31  # vault JSON-RPC transport (tested with 2.31.0)
+PyYAML>=6.0  # routing config parsing, safe_load only (tested with 6.0.1)
+# Optional: Keccak-256 selectors for the vault reader. If pycryptodome
+# is absent, src/vault.py falls back to a verified selector table.
+pycryptodome>=3.18  # tested with 4.3.0

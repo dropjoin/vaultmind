@@ -21,22 +21,23 @@ from dataclasses import dataclass, field
 from .guardrail import GuardrailResult
 from .policy import PolicyVerdict, Proposal
 from .router import RoutedCaller
-from .vault import VaultState, wei_to_eth_str
+from .vault import ZERO_ADDRESS, VaultState, format_amount, unit_label
 
 
 def _proposal_block(proposal: Proposal, state: VaultState,
                     det: PolicyVerdict) -> str:
+    unit = det.facts.get("amount_unit", unit_label(state.token))
     return (
         f"Vault: {state.address} (Arbitrum Sepolia)\n"
         f"Recipient: {proposal.to}\n"
-        f"Amount: {wei_to_eth_str(proposal.amount)} ETH "
-        f"({proposal.amount} wei)\n"
-        f"Token: {'native ETH' if proposal.token == '0x' + '0' * 40 else proposal.token}\n"
-        f"On-chain facts: per-tx cap {det.facts['per_tx_cap_eth']} ETH, "
-        f"daily cap {det.facts['daily_cap_eth']} ETH, spent today "
-        f"{det.facts['spent_today_eth']} ETH, daily headroom "
-        f"{det.facts['daily_headroom_eth']} ETH, vault balance "
-        f"{det.facts['balance_eth']} ETH, frozen={det.facts['frozen']}, "
+        f"Amount: {format_amount(proposal.amount, state.token)} {unit} "
+        f"({proposal.amount} base units)\n"
+        f"Token: {'native ETH' if proposal.token == ZERO_ADDRESS else proposal.token}\n"
+        f"On-chain facts: per-tx cap {det.facts['per_tx_cap_eth']} {unit}, "
+        f"daily cap {det.facts['daily_cap_eth']} {unit}, spent today "
+        f"{det.facts['spent_today_eth']} {unit}, daily headroom "
+        f"{det.facts['daily_headroom_eth']} {unit}, vault balance "
+        f"{det.facts['balance_eth']} {unit}, frozen={det.facts['frozen']}, "
         f"recipient allowlisted={det.facts['recipient_allowed']}, "
         f"policy configured={det.facts['policy_configured']}."
     )
@@ -73,17 +74,38 @@ class CheckerOutcome:
     llm_verdict: str | None = None
 
 
+def _clean_reasons(raw: object) -> list[str]:
+    """Normalize a model's `reasons` value to clean one-line strings.
+
+    Models return a string, null, numbers, or multi-line text as often
+    as a proper list. A bare string used to be iterated character by
+    character into the decision card, and null crashed the checker
+    with a TypeError. Newlines are flattened so a reason cannot break
+    out of the template card's box.
+    """
+    if isinstance(raw, str):
+        items = [raw]
+    elif isinstance(raw, (list, tuple)):
+        items = [str(r) for r in raw]
+    else:
+        items = []
+    cleaned = [" ".join(str(r).split()) for r in items]
+    return [r for r in cleaned if r]
+
+
 def _parse_llm_verdict(text: str) -> tuple[str, list[str]]:
     cleaned = re.sub(r"```(json)?", "", text).strip()
     start, end = cleaned.find("{"), cleaned.rfind("}")
     if start >= 0 and end > start:
         try:
             data = json.loads(cleaned[start:end + 1])
+            if not isinstance(data, dict):
+                raise ValueError("checker verdict JSON is not an object")
             verdict = str(data.get("verdict", "")).upper()
-            reasons = [str(r) for r in data.get("reasons", [])]
+            reasons = _clean_reasons(data.get("reasons", []))
             if verdict in ("PASS", "REJECT"):
                 return verdict, reasons
-        except ValueError:
+        except (ValueError, TypeError, AttributeError):
             pass
     # Unparseable model output is treated as a REJECT: fail closed.
     return "REJECT", ["Checker model returned an unparseable verdict; "
@@ -145,22 +167,24 @@ def run_checker(caller: RoutedCaller | None, proposal: Proposal,
 # ----------------------------------------------------------------------
 def render_card_local(record: dict) -> str:
     """Template decision card — used when no Otari key is configured."""
+    facts = record["facts"]
+    unit = facts.get("amount_unit", "ETH")
     lines = [
         "┌─ VAULTMIND DECISION CARD ─────────────────────────────",
         f"│ Verdict   : {record['final_verdict']}",
         f"│ Recipient : {record['to']}",
-        f"│ Amount    : {record['amount_eth']} ETH",
-        f"│ Policy    : per-tx {record['facts']['per_tx_cap_eth']} ETH · "
-        f"daily {record['facts']['daily_cap_eth']} ETH · "
-        f"headroom {record['facts']['daily_headroom_eth']} ETH",
-        f"│ Balance   : {record['facts']['balance_eth']} ETH · "
-        f"frozen={record['facts']['frozen']}",
+        f"│ Amount    : {record['amount_eth']} {unit}",
+        f"│ Policy    : per-tx {facts['per_tx_cap_eth']} {unit} · "
+        f"daily {facts['daily_cap_eth']} {unit} · "
+        f"headroom {facts['daily_headroom_eth']} {unit}",
+        f"│ Balance   : {facts['balance_eth']} {unit} · "
+        f"frozen={facts['frozen']}",
         "│ Reasons   :",
     ]
     for reason in record["reasons"]:
-        lines.append(f"│   - {reason}")
+        lines.append(f"│   - {' '.join(str(reason).split())}")
     if record.get("guardrail"):
-        lines.append(f"│ Guardrail : {record['guardrail']}")
+        lines.append(f"│ Guardrail : {' '.join(str(record['guardrail']).split())}")
     if record.get("checker_source"):
         lines.append(f"│ Checked by: {record['checker_source']}")
     lines.append("└───────────────────────────────────────────────────────")

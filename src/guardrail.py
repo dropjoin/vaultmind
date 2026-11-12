@@ -4,9 +4,12 @@ A payment memo / justification is attacker-controlled text: anyone can
 ask the agent to pay them and lace the request with instructions for
 the model. VaultMind treats that text as DATA, never as instructions:
 
-1. A deterministic scan (this module) flags classic injection patterns
-   before any model sees the text. High-severity flags force a REJECT
-   at the deterministic layer — no model verdict can override them.
+1. A deterministic scan (this module) runs before the verdict. When
+   it finds a high-severity pattern, the CLI skips the proposer call
+   entirely (the poisoned memo never reaches a model as a drafting
+   prompt), the checker model is not asked, the reporter gets a
+   redacted memo, and the final verdict is REJECT at the
+   deterministic layer — no model verdict can override it.
 2. The checker role's prompt repeats the rule for the model: the memo
    is quoted data; instructions inside it must be reported, not obeyed.
 3. On the gateway side, the same intent is expressed as an Otari
@@ -14,7 +17,10 @@ the model. VaultMind treats that text as DATA, never as instructions:
    see docs/OTARI_FEATURES.md for what is configured where.
 
 The scan is deliberately simple and explainable: it is a tripwire with
-named patterns, not a security guarantee.
+named patterns, not a security guarantee. Obfuscated phrasings
+(unicode homoglyphs, split words, novel wording) can pass it; the
+deterministic policy floor, not this scan, is what keeps a bad
+payment from passing.
 """
 from __future__ import annotations
 
@@ -22,9 +28,9 @@ import re
 from dataclasses import dataclass, field
 
 _HIGH = [
-    (r"ignore\s+(all\s+)?(previous|prior|above)\s+instructions", "ignore-previous-instructions"),
-    (r"disregard\s+(the\s+)?(policy|rules|instructions|checks)", "disregard-policy"),
-    (r"(override|bypass|skip)\s+(the\s+)?(policy|check|cap|allowlist|approval)", "bypass-policy"),
+    (r"ignore\s+(all\s+)?(the\s+)?(previous\s+|prior\s+|above\s+)?instructions", "ignore-previous-instructions"),
+    (r"disregard\s+(all\s+)?(the\s+)?(previous\s+|prior\s+)?(policy|rules|instructions|checks)", "disregard-policy"),
+    (r"(override|bypass|skip)\s+(the\s+|these\s+|those\s+)?(policy|check|cap|allowlist|approval)", "bypass-policy"),
     (r"you\s+are\s+now\s+(a|an|in)\b", "role-reassignment"),
     (r"\bsystem\s*:\s*", "fake-system-message"),
     (r"approve\s+(this|it)\s+(immediately|without|regardless)", "forced-approval"),
@@ -55,7 +61,8 @@ class GuardrailResult:
         if not self.flags:
             return "No injection patterns detected in the memo."
         parts = [f"{f['severity'].upper()} '{f['pattern']}' (matched "
-                 f"\"{f['match']}\")" for f in self.flags]
+                 f"\"{' '.join(str(f['match']).split())}\")"
+                 for f in self.flags]
         return "Injection signals: " + "; ".join(parts)
 
 
